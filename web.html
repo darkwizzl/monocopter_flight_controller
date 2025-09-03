@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Flight Controller with Custom Timing</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', sans-serif; 
+      margin: 0; 
+      padding: 20px; 
+      background: #0d3b66;
+      color: #f4f4f4;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      background: #2e8bc0;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #1c6ea7;
+    }
+    #status {
+      color: #ff9f43;
+      font-weight: bold;
+    }
+    .connected {
+      color: #2ecc71 !important;
+    }
+    .value-display {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 15px 0;
+      color: #ff9f43;
+      text-align: center;
+    }
+    #messages {
+      height: 150px;
+      overflow-y: auto;
+      border: 1px solid #2e8bc0;
+      padding: 10px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.3);
+      font-family: monospace;
+      margin-top: 15px;
+    }
+    #messages div {
+      margin-bottom: 5px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .timing-control {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 15px 0;
+      gap: 10px;
+    }
+    input[type="number"] {
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #2e8bc0;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      width: 80px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Flight Controller with Custom Timing</h2>
+    
+    <div style="text-align: center;">
+      <button onclick="connect()">Connect</button>
+      <button onclick="sendData()">Send Random Velocity</button>
+      <button onclick="startSending()">Start Auto-Send</button>
+      <button onclick="stopSending()">Stop</button>
+      
+      <div class="timing-control">
+        <label>Interval (ms):</label>
+        <input type="number" id="interval" value="1000" min="100" step="100">
+      </div>
+      
+      <p>Status: <span id="status">Disconnected</span></p>
+    </div>
+
+    <div class="value-display">
+      Velocity: <span id="velocityValue">0</span>%
+    </div>
+
+    <div id="messages"></div>
+  </div>
+
+  <script>
+    let ws = null;
+    let intervalId = null;
+    const messagesDiv = document.getElementById('messages');
+
+    function connect() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        addMessage("Already connected");
+        return;
+      }
+
+      try {
+        ws = new WebSocket("ws://localhost:9002");
+        updateStatus("Connecting...");
+        
+        ws.onopen = () => {
+          updateStatus("Connected");
+          addMessage("Connected to server");
+        };
+
+        ws.onmessage = (msg) => {
+          addMessage("Received: " + msg.data);
+        };
+
+        ws.onclose = () => {
+          updateStatus("Disconnected");
+          addMessage("Connection closed");
+          stopSending();
+        };
+
+        ws.onerror = (error) => {
+          updateStatus("Error");
+          addMessage("Connection error");
+        };
+
+      } catch (error) {
+        addMessage("Connection failed");
+        updateStatus("Error");
+      }
+    }
+
+    function getRandomVelocity() {
+      return Math.floor(Math.random() * 101); // Random between 0-100
+    }
+
+    function sendData() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addMessage("Not connected");
+        return;
+      }
+
+      const velocity = getRandomVelocity();
+      const data = { velocity: velocity };
+      
+      document.getElementById('velocityValue').textContent = velocity;
+      ws.send(JSON.stringify(data));
+      addMessage("Sent: " + JSON.stringify(data));
+    }
+
+    function startSending() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addMessage("Not connected");
+        return;
+      }
+
+      if (intervalId) {
+        addMessage("Already sending");
+        return;
+      }
+      
+      const intervalMs = parseInt(document.getElementById('interval').value) || 1000;
+      
+      intervalId = setInterval(sendData, intervalMs);
+      addMessage("Started auto-sending every " + intervalMs + "ms");
+    }
+
+    function stopSending() {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+        addMessage("Stopped auto-sending");
+      }
+    }
+
+    function updateStatus(text) {
+      const statusElement = document.getElementById('status');
+      statusElement.textContent = text;
+      
+      if (text === "Connected") {
+        statusElement.classList.add('connected');
+      } else {
+        statusElement.classList.remove('connected');
+      }
+    }
+
+    function addMessage(text) {
+      const messageElement = document.createElement('div');
+      messageElement.textContent = new Date().toLocaleTimeString() + " - " + text;
+      messagesDiv.appendChild(messageElement);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  </script>
+</body>
+</html>
